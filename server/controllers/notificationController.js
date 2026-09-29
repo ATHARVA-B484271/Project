@@ -1,11 +1,10 @@
-const Notification = require('../models/Notification');
+const db = require('../config/memoryDb');
 
 const getNotifications = async (req, res) => {
   try {
-    const notifications = await Notification.find({ userId: req.user._id })
-      .sort({ createdAt: -1 })
-      .limit(20);
-    res.json({ notifications });
+    const notifications = (await db.findNotifications({ userId: req.user._id })).slice(0, 20);
+    const unreadCount = await db.countUnreadNotifications(req.user._id);
+    res.json({ notifications, unreadCount });
   } catch (error) {
     res.status(500).json({ message: 'Error retrieving notifications.' });
   }
@@ -13,14 +12,11 @@ const getNotifications = async (req, res) => {
 
 const markAllRead = async (req, res) => {
   try {
-    await Notification.updateMany({ userId: req.user._id, isRead: false }, { isRead: true });
+    await db.markAllNotificationsRead(req.user._id);
     res.json({ message: 'Notifications marked as read.' });
   } catch (error) {
     res.status(500).json({ message: 'Error updating notifications.' });
   }
 };
 
-module.exports = {
-  getNotifications,
-  markAllRead,
-};
+module.exports = { getNotifications, markAllRead };
