@@ -1,15 +1,8 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  PlusCircle,
-  FileText,
-  Send,
-  User,
-  LogOut,
-  BookOpen,
-  Menu,
-  X,
+  LayoutDashboard, PlusCircle, FileText, Send,
+  User, LogOut, BookOpen, Menu, X, GraduationCap,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -27,179 +20,168 @@ const Sidebar = () => {
   };
 
   const adminLinks = [
-    { label: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
-    { label: 'Create Assignment', path: '/admin/assignments/create', icon: PlusCircle },
-    { label: 'My Assignments', path: '/admin/assignments', icon: FileText },
-    { label: 'Submissions', path: '/admin/submissions', icon: Send },
-    { label: 'Profile', path: '/admin/profile', icon: User },
+    { label: 'Dashboard',          path: '/admin/dashboard',            icon: LayoutDashboard },
+    { label: 'Create Assignment',   path: '/admin/assignments/create',   icon: PlusCircle },
+    { label: 'My Assignments',      path: '/admin/assignments',          icon: FileText },
+    { label: 'Submissions',         path: '/admin/submissions',          icon: Send },
+    { label: 'Profile',             path: '/admin/profile',              icon: User },
   ];
 
   const studentLinks = [
-    { label: 'Dashboard', path: '/student/dashboard', icon: LayoutDashboard },
-    { label: 'Active Assignments', path: '/student/assignments', icon: BookOpen },
-    { label: 'My Submissions', path: '/student/submissions', icon: Send },
-    { label: 'Profile', path: '/student/profile', icon: User },
+    { label: 'Dashboard',           path: '/student/dashboard',          icon: LayoutDashboard },
+    { label: 'Assignments',         path: '/student/assignments',        icon: BookOpen },
+    { label: 'My Submissions',      path: '/student/submissions',        icon: Send },
+    { label: 'Profile',             path: '/student/profile',            icon: User },
   ];
 
   const links = isAdmin ? adminLinks : studentLinks;
+  const initial = user?.name?.charAt(0)?.toUpperCase() || 'U';
 
   return (
     <>
-      {/* Mobile Menu Toggle Button */}
+      {/* Mobile toggle */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        style={{
-          position: 'fixed',
-          top: '1rem',
-          left: '1rem',
-          zIndex: 1001,
-          display: 'none',
-          padding: '0.6rem',
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border-color)',
-          borderRadius: 'var(--radius-md)',
-          color: 'var(--text-main)',
-        }}
         className="mobile-menu-btn"
+        style={{
+          position: 'fixed', top: '14px', left: '1rem', zIndex: 1001,
+          display: 'none',
+          padding: '0.5rem',
+          background: '#fff',
+          border: '1px solid #e2e8f0',
+          borderRadius: '8px',
+          color: '#475569',
+          boxShadow: '0 1px 4px rgba(0,0,0,.1)',
+        }}
       >
-        {isOpen ? <X size={24} /> : <Menu size={24} />}
+        {isOpen ? <X size={20} /> : <Menu size={20} />}
       </button>
 
+      {/* Sidebar */}
       <aside
+        className={`sidebar ${isOpen ? 'open' : ''}`}
         style={{
-          width: '260px',
-          background: 'var(--bg-card)',
-          borderRight: '1px solid var(--border-color)',
+          width: '240px',
+          background: '#fff',
+          borderRight: '1px solid #e2e8f0',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
-          padding: '1.5rem',
           minHeight: '100vh',
-          transition: 'var(--transition)',
+          flexShrink: 0,
         }}
-        className={`sidebar ${isOpen ? 'open' : ''}`}
       >
+        {/* Top section */}
         <div>
-          {/* Logo */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              marginBottom: '2.5rem',
-              paddingLeft: '0.5rem',
-            }}
-          >
-            <div
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '10px',
-                background: 'linear-gradient(135deg, var(--primary-600), var(--accent-purple))',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                boxShadow: 'var(--shadow-glow)',
-              }}
-            >
-              <BookOpen size={20} />
+          {/* Brand */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '0.6rem',
+            padding: '1.25rem 1.5rem 1.25rem',
+            borderBottom: '1px solid #f1f5f9',
+          }}>
+            <div style={{
+              width: '34px', height: '34px', borderRadius: '8px',
+              background: '#2563eb',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', flexShrink: 0,
+            }}>
+              <BookOpen size={18} />
             </div>
             <div>
-              <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#fff' }}>
-                EduAssign
+              <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.2 }}>
+                Edu<span style={{ color: '#2563eb' }}>Assign</span>
               </div>
-              <div
-                style={{
-                  fontSize: '0.72rem',
-                  fontWeight: '600',
-                  color: 'var(--text-muted)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                }}
-              >
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {isAdmin ? 'Professor Portal' : 'Student Portal'}
               </div>
             </div>
           </div>
 
-          {/* Nav Links */}
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          {/* Role pill */}
+          <div style={{ padding: '1rem 1.5rem 0.5rem' }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+              padding: '0.3rem 0.75rem',
+              background: isAdmin ? '#eff6ff' : '#f0fdf4',
+              color: isAdmin ? '#1d4ed8' : '#15803d',
+              border: `1px solid ${isAdmin ? '#bfdbfe' : '#bbf7d0'}`,
+              borderRadius: '999px',
+              fontSize: '0.75rem', fontWeight: '700',
+            }}>
+              {isAdmin ? <GraduationCap size={13} /> : <User size={13} />}
+              {isAdmin ? 'Professor' : 'Student'}
+            </div>
+          </div>
+
+          {/* Nav */}
+          <nav style={{ padding: '0.75rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {links.map((link) => {
               const Icon = link.icon;
               return (
                 <NavLink
                   key={link.path}
                   to={link.path}
-                  end={link.path === '/admin/dashboard' || link.path === '/student/dashboard'}
+                  end={link.path.endsWith('/dashboard')}
                   onClick={() => setIsOpen(false)}
                   style={({ isActive }) => ({
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.85rem',
-                    padding: '0.85rem 1rem',
-                    borderRadius: 'var(--radius-md)',
-                    fontWeight: isActive ? '700' : '500',
-                    fontSize: '0.925rem',
-                    color: isActive ? '#ffffff' : 'var(--text-muted)',
-                    background: isActive
-                      ? 'linear-gradient(90deg, rgba(79, 70, 229, 0.25), rgba(139, 92, 246, 0.15))'
-                      : 'transparent',
-                    borderLeft: isActive ? '3px solid var(--primary-500)' : '3px solid transparent',
-                    transition: 'var(--transition)',
+                    gap: '0.75rem',
+                    padding: '0.65rem 0.875rem',
+                    borderRadius: '8px',
+                    fontWeight: isActive ? '600' : '500',
+                    fontSize: '0.875rem',
+                    color: isActive ? '#1d4ed8' : '#475569',
+                    background: isActive ? '#eff6ff' : 'transparent',
+                    transition: 'all 0.15s',
+                    textDecoration: 'none',
                   })}
                 >
-                  <Icon size={18} />
-                  <span>{link.label}</span>
+                  {({ isActive }) => (
+                    <>
+                      <Icon size={17} style={{ color: isActive ? '#2563eb' : '#94a3b8', flexShrink: 0 }} />
+                      <span>{link.label}</span>
+                      {isActive && (
+                        <div style={{
+                          marginLeft: 'auto', width: '6px', height: '6px',
+                          borderRadius: '50%', background: '#2563eb', flexShrink: 0,
+                        }} />
+                      )}
+                    </>
+                  )}
                 </NavLink>
               );
             })}
           </nav>
         </div>
 
-        {/* User Card & Logout */}
-        <div style={{ paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              marginBottom: '1rem',
-              padding: '0.5rem',
-              borderRadius: 'var(--radius-md)',
-              background: 'rgba(15, 23, 42, 0.5)',
-            }}
-          >
-            <div
-              style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '50%',
-                background: isAdmin ? 'var(--primary-600)' : 'var(--accent-teal)',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: '700',
-                fontSize: '0.9rem',
-              }}
-            >
-              {user?.name?.charAt(0) || 'U'}
+        {/* Bottom: User + Logout */}
+        <div style={{ padding: '1rem 1rem', borderTop: '1px solid #f1f5f9' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '0.65rem',
+            padding: '0.75rem',
+            background: '#f8fafc',
+            borderRadius: '10px',
+            border: '1px solid #e2e8f0',
+            marginBottom: '0.75rem',
+          }}>
+            <div style={{
+              width: '34px', height: '34px', borderRadius: '50%',
+              background: isAdmin ? '#2563eb' : '#16a34a',
+              color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: '700', fontSize: '0.875rem', flexShrink: 0,
+            }}>
+              {initial}
             </div>
             <div style={{ overflow: 'hidden' }}>
-              <div
-                style={{
-                  fontSize: '0.875rem',
-                  fontWeight: '700',
-                  color: '#fff',
-                  whiteSpace: 'nowrap',
-                  textOverflow: 'ellipsis',
-                  overflow: 'hidden',
-                }}
-              >
+              <div style={{
+                fontSize: '0.82rem', fontWeight: '700', color: '#0f172a',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
                 {user?.name}
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
                 {isAdmin ? user?.adminId || 'Admin' : user?.studentId || 'Student'}
               </div>
             </div>
@@ -207,10 +189,24 @@ const Sidebar = () => {
 
           <button
             onClick={handleLogout}
-            className="btn btn-secondary btn-block btn-sm"
-            style={{ justifyContent: 'flex-start', color: '#fca5a5' }}
+            style={{
+              width: '100%',
+              display: 'flex', alignItems: 'center', gap: '0.6rem',
+              padding: '0.6rem 0.875rem',
+              borderRadius: '8px',
+              color: '#dc2626',
+              background: 'transparent',
+              border: '1px solid #fee2e2',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              transition: 'all 0.15s',
+              cursor: 'pointer',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
           >
-            <LogOut size={16} /> Logout
+            <LogOut size={16} />
+            Sign Out
           </button>
         </div>
       </aside>
