@@ -15,17 +15,21 @@ import AdminLogin from './pages/AdminLogin';
 import StudentRegister from './pages/StudentRegister';
 import StudentLogin from './pages/StudentLogin';
 
-// Admin Pages
+// Admin Pages (Level 1 & Level 2)
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminAssignments from './pages/admin/AdminAssignments';
 import CreateAssignment from './pages/admin/CreateAssignment';
 import AdminSubmissions from './pages/admin/AdminSubmissions';
+import AdminReviewSubmission from './pages/admin/AdminReviewSubmission';
 import AdminProfile from './pages/admin/AdminProfile';
 
-// Student Pages
+// Student Pages (Level 1 & Level 2)
 import StudentDashboard from './pages/student/StudentDashboard';
 import StudentAssignments from './pages/student/StudentAssignments';
 import StudentAssignmentDetails from './pages/student/StudentAssignmentDetails';
+import StudentFeedback from './pages/student/StudentFeedback';
+import StudentResubmit from './pages/student/StudentResubmit';
+import StudentHistory from './pages/student/StudentHistory';
 import StudentSubmissions from './pages/student/StudentSubmissions';
 import StudentProfile from './pages/student/StudentProfile';
 
@@ -77,6 +81,14 @@ function App() {
             }
           />
           <Route
+            path="/admin/submissions/:id/review"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminReviewSubmission />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin/profile"
             element={
               <ProtectedRoute allowedRoles={['admin']}>
@@ -115,6 +127,30 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['student']}>
                 <StudentSubmissions />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/submissions/:assignmentId"
+            element={
+              <ProtectedRoute allowedRoles={['student']}>
+                <StudentFeedback />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/submissions/:assignmentId/update"
+            element={
+              <ProtectedRoute allowedRoles={['student']}>
+                <StudentResubmit />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/submissions/:assignmentId/history"
+            element={
+              <ProtectedRoute allowedRoles={['student']}>
+                <StudentHistory />
               </ProtectedRoute>
             }
           />

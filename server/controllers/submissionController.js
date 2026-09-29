@@ -1,5 +1,6 @@
 const Submission = require('../models/Submission');
 const Assignment = require('../models/Assignment');
+const Notification = require('../models/Notification');
 
 // Helper to validate URL if provided
 const isValidUrl = (urlString) => {
@@ -11,12 +12,14 @@ const isValidUrl = (urlString) => {
   }
 };
 
-// @desc Submit Assignment
+// @desc Submit Assignment (Creates new version if resubmitting)
 // @route POST /api/submissions
+// @route POST /api/submissions/:assignmentId/versions
 // @access Private (Student only)
 const submitAssignment = async (req, res) => {
   try {
-    const { assignmentId, response, submissionLink } = req.body;
+    const assignmentId = req.params.assignmentId || req.body.assignmentId;
+    const { response, submissionLink } = req.body;
 
     if (!assignmentId) {
       return res.status(400).json({ message: 'Assignment ID is required.' });
@@ -35,6 +38,24 @@ const submitAssignment = async (req, res) => {
       return res.status(404).json({ message: 'Assignment not found.' });
     }
 
+    // Find all existing submission versions for this student + assignment
+    const existingVersions = await Submission.find({
+      assignmentId,
+      studentId: req.user._id,
+    }).sort({ version: -1 });
+
+    if (existingVersions.length > 0) {
+      const latestVersion = existingVersions[0];
+      if (latestVersion.reviewStatus === 'ACCEPTED') {
+        return res.status(400).json({
+          message: 'This assignment has already been ACCEPTED by your professor. No further updates allowed.',
+        });
+      }
+    }
+
+    // Calculate version number: nextVersion = highest existing version + 1
+    const nextVersion = existingVersions.length > 0 ? existingVersions[0].version + 1 : 1;
+
     // SERVER TIMESTAMP DEADLINE COMPARISON LOGIC
     const submittedAt = new Date();
     const deadlineDate = new Date(assignment.deadline);
@@ -42,40 +63,85 @@ const submitAssignment = async (req, res) => {
     // Exact comparison: IF submittedAt <= deadlineDate -> ON_TIME, ELSE -> LATE
     const status = submittedAt.getTime() <= deadlineDate.getTime() ? 'ON_TIME' : 'LATE';
 
-    // Upsert submission (if already submitted, update submission)
-    const existingSubmission = await Submission.findOne({
+    // CREATE A BRAND NEW VERSION RECORD (Never overwrite previous versions)
+    const newSubmission = await Submission.create({
       assignmentId,
       studentId: req.user._id,
+      version: nextVersion,
+      response: response ? response.trim() : '',
+      submissionLink: submissionLink ? submissionLink.trim() : '',
+      submittedAt,
+      status,
+      reviewStatus: 'PENDING',
+      marks: null,
+      feedback: '',
     });
 
-    let submission;
-    if (existingSubmission) {
-      existingSubmission.response = response || existingSubmission.response;
-      existingSubmission.submissionLink = submissionLink || existingSubmission.submissionLink;
-      existingSubmission.submittedAt = submittedAt;
-      existingSubmission.status = status;
-      submission = await existingSubmission.save();
-    } else {
-      submission = await Submission.create({
-        assignmentId,
-        studentId: req.user._id,
-        response,
-        submissionLink,
-        submittedAt,
-        status,
-      });
-    }
-
-    const populatedSubmission = await Submission.findById(submission._id)
-      .populate('assignmentId', 'title description deadline')
+    const populatedSubmission = await Submission.findById(newSubmission._id)
+      .populate('assignmentId', 'title description deadline maxMarks')
       .populate('studentId', 'name email studentId department academicYear');
 
-    res.status(200).json({
-      message: status === 'ON_TIME' ? 'Assignment submitted ON TIME!' : 'Assignment submitted LATE.',
+    res.status(201).json({
+      message: status === 'ON_TIME' ? `Version ${nextVersion} submitted ON TIME!` : `Version ${nextVersion} submitted LATE.`,
       submission: populatedSubmission,
     });
   } catch (error) {
     res.status(500).json({ message: error.message || 'Server error processing submission.' });
+  }
+};
+
+// @desc Review Submission (Admin)
+// @route PUT /api/submissions/:id/review
+// @access Private (Admin only)
+const reviewSubmission = async (req, res) => {
+  try {
+    const { marks, status, feedback } = req.body;
+
+    if (!status || !['ACCEPTED', 'NEEDS_CHANGES'].includes(status)) {
+      return res.status(400).json({ message: 'Valid review status (ACCEPTED or NEEDS_CHANGES) is required.' });
+    }
+
+    const submission = await Submission.findById(req.params.id).populate('assignmentId');
+    if (!submission) {
+      return res.status(404).json({ message: 'Submission not found.' });
+    }
+
+    const maxMarks = submission.assignmentId.maxMarks || 10;
+    const numericMarks = Number(marks);
+
+    if (isNaN(numericMarks) || numericMarks < 0 || numericMarks > maxMarks) {
+      return res.status(400).json({ message: `Marks must be a valid number between 0 and ${maxMarks}.` });
+    }
+
+    submission.reviewStatus = status;
+    submission.marks = numericMarks;
+    submission.feedback = feedback ? feedback.trim() : '';
+    submission.reviewedAt = new Date();
+    submission.reviewedBy = req.user._id;
+
+    await submission.save();
+
+    // Create Notification for student
+    await Notification.create({
+      userId: submission.studentId,
+      title: `Assignment Review: ${submission.assignmentId.title}`,
+      message: `Your Version ${submission.version} submission was reviewed by your professor. Status: ${
+        status === 'ACCEPTED' ? 'ACCEPTED' : 'NEEDS CHANGES'
+      }. Marks: ${numericMarks}/${maxMarks}.`,
+      type: status === 'ACCEPTED' ? 'success' : 'warning',
+    });
+
+    const populatedSubmission = await Submission.findById(submission._id)
+      .populate('assignmentId', 'title description deadline maxMarks')
+      .populate('studentId', 'name email studentId department academicYear')
+      .populate('reviewedBy', 'name email adminId');
+
+    res.json({
+      message: 'Submission reviewed successfully.',
+      submission: populatedSubmission,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Server error reviewing submission.' });
   }
 };
 
@@ -87,7 +153,7 @@ const getSubmissions = async (req, res) => {
     const submissions = await Submission.find()
       .populate({
         path: 'assignmentId',
-        select: 'title description deadline createdBy',
+        select: 'title description deadline createdBy maxMarks',
       })
       .populate('studentId', 'name email studentId department academicYear')
       .sort({ submittedAt: -1 });
@@ -97,7 +163,20 @@ const getSubmissions = async (req, res) => {
       (sub) => sub.assignmentId && sub.assignmentId.createdBy.toString() === req.user._id.toString()
     );
 
-    res.json({ submissions: adminSubmissions });
+    // Calculate Summary Stats
+    const pendingCount = adminSubmissions.filter((s) => s.reviewStatus === 'PENDING').length;
+    const needsChangesCount = adminSubmissions.filter((s) => s.reviewStatus === 'NEEDS_CHANGES').length;
+    const acceptedCount = adminSubmissions.filter((s) => s.reviewStatus === 'ACCEPTED').length;
+
+    res.json({
+      submissions: adminSubmissions,
+      stats: {
+        totalSubmissions: adminSubmissions.length,
+        pendingCount,
+        needsChangesCount,
+        acceptedCount,
+      },
+    });
   } catch (error) {
     res.status(500).json({ message: 'Server error retrieving submissions.' });
   }
@@ -109,14 +188,15 @@ const getSubmissions = async (req, res) => {
 const getSubmissionById = async (req, res) => {
   try {
     const submission = await Submission.findById(req.params.id)
-      .populate('assignmentId', 'title description deadline createdBy')
-      .populate('studentId', 'name email studentId department academicYear');
+      .populate('assignmentId', 'title description deadline createdBy maxMarks')
+      .populate('studentId', 'name email studentId department academicYear')
+      .populate('reviewedBy', 'name email adminId');
 
     if (!submission) {
       return res.status(404).json({ message: 'Submission not found.' });
     }
 
-    // Verify ownership/role permission
+    // Verify authorization
     if (
       req.user.role === 'student' &&
       submission.studentId._id.toString() !== req.user._id.toString()
@@ -124,62 +204,90 @@ const getSubmissionById = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to view this submission.' });
     }
 
-    res.json({ submission });
+    // Check count of total versions for this student + assignment
+    const previousVersionsCount = await Submission.countDocuments({
+      assignmentId: submission.assignmentId._id,
+      studentId: submission.studentId._id,
+    });
+
+    res.json({
+      submission,
+      totalVersions: previousVersionsCount,
+    });
   } catch (error) {
     res.status(500).json({ message: 'Server error retrieving submission.' });
   }
 };
 
-// @desc Get Submissions by Assignment ID (Admin)
-// @route GET /api/submissions/assignment/:assignmentId
-// @access Private (Admin only)
-const getSubmissionsByAssignmentId = async (req, res) => {
+// @desc Get Submission History for Assignment (Student or Admin)
+// @route GET /api/submissions/assignment/:assignmentId/history
+// @access Private
+const getSubmissionHistory = async (req, res) => {
   try {
     const { assignmentId } = req.params;
+    const studentId = req.query.studentId || req.user._id;
+
+    // Verify permission if student
+    if (req.user.role === 'student' && studentId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to view this history.' });
+    }
 
     const assignment = await Assignment.findById(assignmentId);
     if (!assignment) {
       return res.status(404).json({ message: 'Assignment not found.' });
     }
 
-    if (assignment.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized to view submissions for this assignment.' });
-    }
-
-    const submissions = await Submission.find({ assignmentId })
-      .populate('studentId', 'name email studentId department academicYear')
-      .sort({ submittedAt: -1 });
+    const versions = await Submission.find({ assignmentId, studentId })
+      .populate('reviewedBy', 'name email adminId')
+      .sort({ version: -1 });
 
     res.json({
       assignment: {
         id: assignment._id,
         title: assignment.title,
+        description: assignment.description,
         deadline: assignment.deadline,
+        maxMarks: assignment.maxMarks || 10,
       },
-      submissions,
+      history: versions,
+      latestVersion: versions.length > 0 ? versions[0] : null,
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error retrieving assignment submissions.' });
+    res.status(500).json({ message: 'Server error retrieving submission history.' });
   }
 };
 
-// @desc Get My Submissions (Student)
+// @desc Get Submissions by Student ID (Student)
 // @route GET /api/submissions/student/:studentId
 // @access Private (Student only)
 const getSubmissionsByStudentId = async (req, res) => {
   try {
     const { studentId } = req.params;
 
-    // Verify student is fetching their own submissions
     if (req.user._id.toString() !== studentId && req.user.studentId !== studentId) {
       return res.status(403).json({ message: 'Not authorized to view these submissions.' });
     }
 
-    const submissions = await Submission.find({ studentId: req.user._id })
-      .populate('assignmentId', 'title description deadline')
+    // Fetch all submissions by student
+    const allSubmissions = await Submission.find({ studentId: req.user._id })
+      .populate('assignmentId', 'title description deadline maxMarks')
       .sort({ submittedAt: -1 });
 
-    res.json({ submissions });
+    // Group by assignment to highlight the latest version per assignment
+    const latestByAssignment = {};
+    allSubmissions.forEach((sub) => {
+      const assignId = sub.assignmentId?._id?.toString() || sub.assignmentId?.toString();
+      if (!latestByAssignment[assignId] || sub.version > latestByAssignment[assignId].version) {
+        latestByAssignment[assignId] = sub;
+      }
+    });
+
+    const latestSubmissions = Object.values(latestByAssignment);
+
+    res.json({
+      submissions: latestSubmissions,
+      allHistory: allSubmissions,
+    });
   } catch (error) {
     res.status(500).json({ message: 'Server error retrieving student submissions.' });
   }
@@ -187,8 +295,9 @@ const getSubmissionsByStudentId = async (req, res) => {
 
 module.exports = {
   submitAssignment,
+  reviewSubmission,
   getSubmissions,
   getSubmissionById,
-  getSubmissionsByAssignmentId,
+  getSubmissionHistory,
   getSubmissionsByStudentId,
 };

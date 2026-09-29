@@ -4,12 +4,13 @@ import Sidebar from '../../components/Sidebar';
 import TopHeader from '../../components/TopHeader';
 import API from '../../services/api';
 import { useToast } from '../../context/ToastContext';
-import { PlusCircle, XCircle } from 'lucide-react';
+import { PlusCircle, XCircle, Award } from 'lucide-react';
 
 const CreateAssignment = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [deadline, setDeadline] = useState('');
+  const [maxMarks, setMaxMarks] = useState(10);
   const [loading, setLoading] = useState(false);
   const { showSuccess, showError } = useToast();
   const navigate = useNavigate();
@@ -28,18 +29,21 @@ const CreateAssignment = () => {
       return;
     }
 
+    if (maxMarks <= 0) {
+      showError('Maximum marks must be greater than 0.');
+      return;
+    }
+
     try {
       setLoading(true);
       await API.post('/assignments', {
         title,
         description,
         deadline,
+        maxMarks: Number(maxMarks),
       });
 
       showSuccess('Assignment created successfully!');
-      setTitle('');
-      setDescription('');
-      setDeadline('');
       navigate('/admin/assignments');
     } catch (err) {
       showError(err.message);
@@ -90,18 +94,36 @@ const CreateAssignment = () => {
                 />
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Submission Deadline *</label>
-                <input
-                  type="datetime-local"
-                  className="form-input"
-                  value={deadline}
-                  onChange={(e) => setDeadline(e.target.value)}
-                  required
-                />
-                <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.35rem', display: 'block' }}>
-                  Students submitting after this date/time will be marked as LATE.
-                </small>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Submission Deadline *</label>
+                  <input
+                    type="datetime-local"
+                    className="form-input"
+                    value={deadline}
+                    onChange={(e) => setDeadline(e.target.value)}
+                    required
+                  />
+                  <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.35rem', display: 'block' }}>
+                    Students submitting after this date will be marked as LATE.
+                  </small>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Maximum Marks *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    className="form-input"
+                    placeholder="e.g. 10 or 100"
+                    value={maxMarks}
+                    onChange={(e) => setMaxMarks(e.target.value)}
+                    required
+                  />
+                  <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.35rem', display: 'block' }}>
+                    Total evaluation score limit for this task.
+                  </small>
+                </div>
               </div>
 
               <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>

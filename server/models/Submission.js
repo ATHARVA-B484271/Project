@@ -12,6 +12,11 @@ const submissionSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    version: {
+      type: Number,
+      required: true,
+      default: 1,
+    },
     response: {
       type: String,
       trim: true,
@@ -29,11 +34,32 @@ const submissionSchema = new mongoose.Schema(
       enum: ['ON_TIME', 'LATE'],
       required: true,
     },
+    reviewStatus: {
+      type: String,
+      enum: ['PENDING', 'NEEDS_CHANGES', 'ACCEPTED'],
+      default: 'PENDING',
+    },
+    marks: {
+      type: Number,
+      default: null,
+    },
+    feedback: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    reviewedAt: {
+      type: Date,
+    },
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
   },
   { timestamps: true }
 );
 
-// Ensure a student can only submit once per assignment or update existing submission
-submissionSchema.index({ assignmentId: 1, studentId: 1 }, { unique: true });
+// Compound unique index on assignmentId, studentId, and version
+submissionSchema.index({ assignmentId: 1, studentId: 1, version: 1 }, { unique: true });
 
 module.exports = mongoose.model('Submission', submissionSchema);

@@ -16,6 +16,11 @@ const assignmentSchema = new mongoose.Schema(
       type: Date,
       required: [true, 'Submission deadline is required'],
     },
+    maxMarks: {
+      type: Number,
+      default: 10,
+      min: [1, 'Maximum marks must be at least 1'],
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
