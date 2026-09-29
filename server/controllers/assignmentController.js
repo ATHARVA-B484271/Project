@@ -1,176 +1,78 @@
-const Assignment = require('../models/Assignment');
-const Submission = require('../models/Submission');
+const db = require('../config/memoryDb');
 
-// @desc Create Assignment
-// @route POST /api/assignments
-// @access Private (Admin only)
+// ─── Create Assignment (Admin only) ─────────────────────────────────────
 const createAssignment = async (req, res) => {
   try {
-    const { title, description, deadline } = req.body;
-
-    if (!title || !description || !deadline) {
-      return res.status(400).json({ message: 'Title, description, and deadline are required.' });
-    }
+    const { title, description, deadline, maxMarks } = req.body;
+    if (!title || !description || !deadline)
+      return res.status(400).json({ message: 'Title, description and deadline are required.' });
 
     const deadlineDate = new Date(deadline);
-    if (isNaN(deadlineDate.getTime())) {
-      return res.status(400).json({ message: 'Invalid deadline date format.' });
-    }
+    if (isNaN(deadlineDate.getTime()))
+      return res.status(400).json({ message: 'Invalid deadline date.' });
 
-    // Deadline validation check (must not be in the past when creating)
-    if (deadlineDate <= new Date()) {
-      return res.status(400).json({ message: 'Deadline date must be in the future.' });
-    }
-
-    const assignment = await Assignment.create({
-      title,
-      description,
+    const assignment = await db.createAssignment({
+      title: title.trim(),
+      description: description.trim(),
       deadline: deadlineDate,
-      createdBy: req.user._id,
+      maxMarks: maxMarks ? Number(maxMarks) : 100,
+      createdBy: req.user.userId,
     });
 
-    const populatedAssignment = await Assignment.findById(assignment._id).populate('createdBy', 'name email adminId department');
-
-    res.status(201).json({
-      message: 'Assignment created successfully.',
-      assignment: populatedAssignment,
-    });
+    res.status(201).json({ message: 'Assignment created successfully.', assignment });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Server error creating assignment.' });
+    res.status(500).json({ message: error.message || 'Error creating assignment.' });
   }
 };
 
-// @desc Get All Assignments
-// @route GET /api/assignments
-// @access Private
+// ─── Get All Assignments ────────────────────────────────────────────────
 const getAssignments = async (req, res) => {
   try {
-    let query = {};
-    if (req.user.role === 'admin') {
-      // Admin sees assignments created by them
-      query = { createdBy: req.user._id };
-    }
+    const assignments = await db.findAssignments();
 
-    const assignments = await Assignment.find(query)
-      .populate('createdBy', 'name email adminId department')
-      .sort({ createdAt: -1 });
+    // Enrich with submission counts
+    const enriched = await Promise.all(assignments.map(async (a) => {
+      const subs = await db.findSubmissions({ assignmentId: a._id });
+      const uniqueStudents = new Set(subs.map(s => s.studentId)).size;
+      return { ...a, submissionCount: uniqueStudents };
+    }));
 
-    // Fetch submission stats or individual student submission state
-    const currentTime = new Date();
-
-    if (req.user.role === 'admin') {
-      const enrichedAssignments = await Promise.all(
-        assignments.map(async (assignment) => {
-          const submissionCount = await Submission.countDocuments({ assignmentId: assignment._id });
-          const isClosed = currentTime > new Date(assignment.deadline);
-          return {
-            ...assignment.toObject(),
-            submissionCount,
-            status: isClosed ? 'CLOSED' : 'ACTIVE',
-          };
-        })
-      );
-      return res.json({ assignments: enrichedAssignments });
-    }
-
-    // Student role
-    const enrichedAssignments = await Promise.all(
-      assignments.map(async (assignment) => {
-        const submission = await Submission.findOne({
-          assignmentId: assignment._id,
-          studentId: req.user._id,
-        });
-
-        const isClosed = currentTime > new Date(assignment.deadline);
-        return {
-          ...assignment.toObject(),
-          status: isClosed ? 'CLOSED' : 'ACTIVE',
-          submissionStatus: submission ? submission.status : 'NOT_SUBMITTED',
-          submittedAt: submission ? submission.submittedAt : null,
-          submissionId: submission ? submission._id : null,
-        };
-      })
-    );
-
-    res.json({ assignments: enrichedAssignments });
+    res.json({ assignments: enriched });
   } catch (error) {
-    res.status(500).json({ message: 'Server error retrieving assignments.' });
+    res.status(500).json({ message: error.message || 'Error fetching assignments.' });
   }
 };
 
-// @desc Get Single Assignment
-// @route GET /api/assignments/:id
-// @access Private
+// ─── Get Single Assignment ──────────────────────────────────────────────
 const getAssignmentById = async (req, res) => {
   try {
-    const assignment = await Assignment.findById(req.params.id).populate('createdBy', 'name email adminId department');
+    const assignment = await db.findAssignment(req.params.id);
+    if (!assignment) return res.status(404).json({ message: 'Assignment not found.' });
 
-    if (!assignment) {
-      return res.status(404).json({ message: 'Assignment not found.' });
-    }
+    const subs = await db.findSubmissions({ assignmentId: assignment._id });
 
-    const currentTime = new Date();
-    const isClosed = currentTime > new Date(assignment.deadline);
+    // Enrich submissions with student info
+    const enrichedSubs = await Promise.all(subs.map(async (s) => {
+      const student = await db.findUser({ _id: s.studentId });
+      return { ...s, student: student ? { id: student._id, name: student.name, email: student.email, studentId: student.studentId } : null };
+    }));
 
-    let submissionInfo = null;
-
-    if (req.user.role === 'student') {
-      const submission = await Submission.findOne({
-        assignmentId: assignment._id,
-        studentId: req.user._id,
-      });
-
-      if (submission) {
-        submissionInfo = {
-          id: submission._id,
-          response: submission.response,
-          submissionLink: submission.submissionLink,
-          submittedAt: submission.submittedAt,
-          status: submission.status,
-        };
-      }
-    }
-
-    res.json({
-      assignment: {
-        ...assignment.toObject(),
-        status: isClosed ? 'CLOSED' : 'ACTIVE',
-      },
-      submission: submissionInfo,
-    });
+    res.json({ assignment: { ...assignment, submissions: enrichedSubs } });
   } catch (error) {
-    res.status(500).json({ message: 'Server error retrieving assignment.' });
+    res.status(500).json({ message: error.message || 'Error fetching assignment.' });
   }
 };
 
-// @desc Delete Assignment
-// @route DELETE /api/assignments/:id
-// @access Private (Admin only)
+// ─── Delete Assignment (Admin only) ────────────────────────────────────
 const deleteAssignment = async (req, res) => {
   try {
-    const assignment = await Assignment.findById(req.params.id);
-
-    if (!assignment) {
-      return res.status(404).json({ message: 'Assignment not found.' });
-    }
-
-    if (assignment.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized to delete this assignment.' });
-    }
-
-    await Assignment.findByIdAndDelete(req.params.id);
-    // Also delete associated submissions
-    await Submission.deleteMany({ assignmentId: req.params.id });
-
-    res.json({ message: 'Assignment and associated submissions deleted successfully.' });
+    const assignment = await db.findAssignment(req.params.id);
+    if (!assignment) return res.status(404).json({ message: 'Assignment not found.' });
+    await db.deleteAssignment(req.params.id);
+    res.json({ message: 'Assignment deleted successfully.' });
   } catch (error) {
-    res.status(500).json({ message: 'Server error deleting assignment.' });
+    res.status(500).json({ message: error.message || 'Error deleting assignment.' });
   }
 };
 
-module.exports = {
-  createAssignment,
-  getAssignments,
-  getAssignmentById,
-  deleteAssignment,
-};
+module.exports = { createAssignment, getAssignments, getAssignmentById, deleteAssignment };
