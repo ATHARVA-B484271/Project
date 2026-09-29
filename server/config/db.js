@@ -1,31 +1,43 @@
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
 
-let mongoServer = null;
+let isConnected = false;
 
 const connectDB = async () => {
-  try {
-    let mongoUri = process.env.MONGODB_URI;
+  if (isConnected && mongoose.connection.readyState === 1) {
+    console.log('[MongoDB] Reusing existing connection.');
+    return;
+  }
 
-    if (mongoUri && mongoUri.trim() !== '') {
-      try {
-        await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 3000 });
-        console.log(`[MongoDB] Connected to provided URI: ${mongoUri}`);
-        return;
-      } catch (err) {
-        console.warn(`[MongoDB] Could not connect to MONGODB_URI. Falling back to in-memory MongoDB database... (${err.message})`);
-      }
+  const mongoUri = process.env.MONGODB_URI;
+
+  if (!mongoUri || mongoUri.trim() === '') {
+    // Fallback: in-memory MongoDB for local dev / demo without Atlas
+    try {
+      const { MongoMemoryServer } = require('mongodb-memory-server');
+      const mongoServer = await MongoMemoryServer.create();
+      const uri = mongoServer.getUri();
+      await mongoose.connect(uri);
+      isConnected = true;
+      console.log('[MongoDB] ✅ Connected to In-Memory MongoDB (demo mode)');
+      console.log('[MongoDB] ⚠️  Data resets on server restart. Set MONGODB_URI for persistence.');
+    } catch (err) {
+      console.error('[MongoDB] ❌ Could not start in-memory MongoDB:', err.message);
+      console.error('[MongoDB] Please set MONGODB_URI environment variable.');
+      throw new Error('No MONGODB_URI set and in-memory MongoDB unavailable.');
     }
+    return;
+  }
 
-    // Fallback: Mongo Memory Server for zero-config demonstration
-    mongoServer = await MongoMemoryServer.create();
-    mongoUri = mongoServer.getUri();
-    await mongoose.connect(mongoUri);
-    console.log(`[MongoDB] Connected to In-Memory MongoDB instance at: ${mongoUri}`);
-
-  } catch (error) {
-    console.error(`[MongoDB] Error connecting to database: ${error.message}`);
-    process.exit(1);
+  try {
+    await mongoose.connect(mongoUri, {
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+    });
+    isConnected = true;
+    console.log('[MongoDB] ✅ Connected to MongoDB Atlas');
+  } catch (err) {
+    console.error('[MongoDB] ❌ Connection failed:', err.message);
+    throw err;
   }
 };
 

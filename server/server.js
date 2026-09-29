@@ -8,17 +8,12 @@ dotenv.config();
 
 const app = express();
 
-// Middlewares
-const allowedOrigins = [
-  process.env.CLIENT_URL,
-  'http://localhost:3000',
-  'http://localhost:5173',
-].filter(Boolean);
-
+// Middlewares — allow all origins for demo deployment
 app.use(
   cors({
-    origin: allowedOrigins.length > 0 ? allowedOrigins : '*',
-    credentials: true,
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
 app.use(express.json());
